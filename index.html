@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
   <meta charset="UTF-8" />
   <title>Order Board - Liquid Glass</title>
@@ -107,6 +107,19 @@
       color: #9ca3af;
     }
 
+    .status-msg {
+      font-size: 11px;
+      color: #fbbf24;
+    }
+
+    .status-msg.ok {
+      color: #4ade80;
+    }
+
+    .status-msg.err {
+      color: #f97316;
+    }
+
     .palette {
       display: flex;
       align-items: center;
@@ -153,6 +166,7 @@
       gap: 12px;
     }
 
+    /* DROP ZONE */
     #drop-zone {
       position: relative;
       border-radius: 18px;
@@ -236,6 +250,7 @@
       box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
     }
 
+    /* TABLE CONTAINER */
     #table-container {
       max-height: 460px;
       border-radius: 18px;
@@ -341,6 +356,7 @@
       max-width: 220px;
     }
 
+    /* coret kalau done */
     tr.row-done .cell-text {
       text-decoration: line-through;
       text-decoration-thickness: 1px;
@@ -400,12 +416,6 @@
       background: rgba(17, 24, 39, 0.95);
     }
 
-    #status-msg {
-      margin-top: 6px;
-      font-size: 11px;
-      color: #f97316;
-    }
-
     @media (max-width: 768px) {
       .glass-card {
         padding: 16px 14px 14px;
@@ -432,7 +442,7 @@
             <div class="subtitle">
               Drag & drop file Excel pesanan-mu, checklist & kasih warna status.
             </div>
-            <div id="status-msg"></div>
+            <div id="status-msg" class="status-msg"></div>
           </div>
 
           <div class="palette" id="palette">
@@ -449,28 +459,31 @@
             <div class="drop-text">
               <div class="drop-title">Drag & drop file Excel (.xlsx) di sini</div>
               <div class="drop-subtitle">
-                atau <span class="browse-link" id="browse-btn">pilih file dari komputer</span>.
+                atau 
+                <!-- pakai LABEL biar kayak web UT -->
+                <label for="file-input" class="browse-link">pilih file dari komputer</label>.
               </div>
             </div>
             <div class="chip">
               <span class="chip-dot"></span>
               <span>Live dari Excel • 1 sheet pertama</span>
             </div>
-            <input type="file" id="file-input" accept=".xlsx,.xls" hidden />
+            <!-- input file disembunyikan tapi tetap ada di DOM -->
+            <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none;" />
           </div>
 
           <div id="table-container">
-            <!-- tabel akan di-generate lewat JS setelah file di-drop -->
+            <!-- tabel di-generate via JS setelah file dibaca -->
           </div>
         </main>
 
         <footer>
           <div class="hint">
-            <span><span class="kbd">1</span> Pilih baris pesanan (klik baris)</span>
-            <span><span class="kbd">2</span> Klik warna di atas untuk set status</span>
-            <span><span class="kbd">3</span> Checklist untuk coret yang sudah beres</span>
+            <span><span class="kbd">1</span> Klik baris untuk pilih pesanan</span>
+            <span><span class="kbd">2</span> Klik warna di atas untuk atur status</span>
+            <span><span class="kbd">3</span> Checklist untuk coret pesanan yang sudah beres</span>
           </div>
-          <div>Data tidak disimpan ke server, hanya di browser kamu.</div>
+          <div>Semua proses hanya di browser kamu (nggak upload ke server).</div>
         </footer>
       </div>
     </div>
@@ -480,24 +493,22 @@
     window.addEventListener("DOMContentLoaded", () => {
       const dropZone = document.getElementById("drop-zone");
       const fileInput = document.getElementById("file-input");
-      const browseBtn = document.getElementById("browse-btn");
       const tableContainer = document.getElementById("table-container");
       const paletteDots = document.querySelectorAll(".color-dot");
       const statusMsg = document.getElementById("status-msg");
       let currentColor = "red";
       let selectedRow = null;
 
-      // INFO awal
-      statusMsg.textContent = "Siap. Tarik file Excel ke kotak, atau klik 'pilih file dari komputer'.";
-
-      // Cek apakah XLSX ke-load
+      // info awal
       if (typeof XLSX === "undefined") {
         statusMsg.textContent = "❌ Gagal load library XLSX. Cek koneksi internet / blokir CDN.";
+        statusMsg.classList.add("err");
       } else {
-        statusMsg.textContent = "✅ XLSX siap. Silakan pilih file Excel.";
+        statusMsg.textContent = "✅ XLSX siap. Tarik file atau klik 'pilih file dari komputer'.";
+        statusMsg.classList.add("ok");
       }
 
-      // Palette logic
+      // ---- Palette (warna status) ----
       paletteDots.forEach(dot => {
         dot.addEventListener("click", () => {
           paletteDots.forEach(d => d.classList.remove("active"));
@@ -516,23 +527,16 @@
         tag.className = "color-tag " + color;
       }
 
-      // Drag & Drop events
-      if (dropZone && fileInput) {
-        dropZone.addEventListener("click", () => fileInput.click());
+      // ---- Input file (via LABEL) ----
+      fileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        handleFile(file);
+        // reset supaya bisa pilih file yang sama lagi
+        fileInput.value = "";
+      });
 
-        if (browseBtn) {
-          browseBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            fileInput.click();
-          });
-        }
-
-        fileInput.addEventListener("change", (e) => {
-          const file = e.target.files[0];
-          handleFile(file);
-          fileInput.value = "";
-        });
-
+      // ---- Drag & Drop ----
+      if (dropZone) {
         dropZone.addEventListener("dragover", (e) => {
           e.preventDefault();
           dropZone.classList.add("dragover");
@@ -549,27 +553,31 @@
           const file = e.dataTransfer.files[0];
           handleFile(file);
         });
-      } else {
-        statusMsg.textContent = "❌ Elemen drop zone / file input tidak ditemukan di DOM.";
       }
 
-      // Handle Excel file
+      // ---- Handle file Excel ----
       function handleFile(file) {
         if (!file) return;
 
         if (typeof XLSX === "undefined") {
-          alert("Library XLSX belum ke-load. Cek koneksi internet / tag <script> untuk XLSX.");
+          alert("Library XLSX belum ke-load. Cek koneksi internet / script XLSX di <head>.");
           statusMsg.textContent = "❌ XLSX undefined. Cek blokir script / internet.";
+          statusMsg.classList.add("err");
+          statusMsg.classList.remove("ok");
           return;
         }
 
         if (!/\.xlsx?$/.test(file.name.toLowerCase())) {
           alert("Tolong pilih file Excel (.xlsx / .xls)");
           statusMsg.textContent = "❌ File yang dipilih bukan Excel.";
+          statusMsg.classList.add("err");
+          statusMsg.classList.remove("ok");
           return;
         }
 
-        statusMsg.textContent = "⏳ Membaca file: " + file.name;
+        statusMsg.textContent = "⏳ Membaca file: " + file.name + "...";
+        statusMsg.classList.remove("err");
+        statusMsg.classList.remove("ok");
 
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -583,30 +591,37 @@
             if (!json || !json.length) {
               alert("Sheet pertama kosong atau tidak terbaca.");
               statusMsg.textContent = "❌ Sheet pertama kosong / tidak terbaca.";
+              statusMsg.classList.add("err");
               return;
             }
 
             buildTable(json);
             statusMsg.textContent = "✅ File dimuat: " + file.name + " (" + json.length + " baris).";
+            statusMsg.classList.add("ok");
           } catch (err) {
             console.error(err);
             alert("Gagal membaca file. Cek format Excel kamu.");
             statusMsg.textContent = "❌ Error membaca Excel. Lihat console browser (F12 → Console).";
+            statusMsg.classList.add("err");
           }
         };
+
         reader.onerror = () => {
           alert("Gagal membaca file. Coba lagi.");
           statusMsg.textContent = "❌ FileReader error.";
+          statusMsg.classList.add("err");
         };
+
         reader.readAsArrayBuffer(file);
       }
 
-      // Build table from JSON
+      // ---- Build tabel dari JSON ----
       function buildTable(rows) {
         selectedRow = null;
         tableContainer.innerHTML = "";
 
         const columns = Object.keys(rows[0]);
+
         const table = document.createElement("table");
         const thead = document.createElement("thead");
         const headerRow = document.createElement("tr");
@@ -634,6 +649,7 @@
           const tr = document.createElement("tr");
           tr.dataset.index = index;
 
+          // checkbox
           const tdCheck = document.createElement("td");
           const cb = document.createElement("input");
           cb.type = "checkbox";
@@ -648,12 +664,14 @@
           tdCheck.appendChild(cb);
           tr.appendChild(tdCheck);
 
+          // color tag
           const tdColor = document.createElement("td");
           const tag = document.createElement("div");
           tag.className = "color-tag";
           tdColor.appendChild(tag);
           tr.appendChild(tdColor);
 
+          // kolom data dari Excel
           columns.forEach(col => {
             const td = document.createElement("td");
             const span = document.createElement("span");
@@ -663,8 +681,9 @@
             tr.appendChild(td);
           });
 
+          // klik baris untuk pilih
           tr.addEventListener("click", (e) => {
-            if (e.target.tagName === "INPUT") return;
+            if (e.target.tagName === "INPUT") return; // biar checkbox tetap bisa diklik aman
 
             if (selectedRow && selectedRow !== tr) {
               selectedRow.classList.remove("selected");
