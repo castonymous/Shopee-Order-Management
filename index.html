@@ -250,9 +250,70 @@
       box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
     }
 
+    /* SEARCH BAR */
+    .search-bar {
+      margin-top: 10px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .search-input-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.8);
+      background: radial-gradient(circle at top, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.98));
+    }
+
+    .search-input-wrap span.icon {
+      font-size: 13px;
+      opacity: 0.8;
+    }
+
+    #search-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 12px;
+      color: #e5e7eb;
+    }
+
+    #search-input::placeholder {
+      color: #9ca3af;
+    }
+
+    #clear-search {
+      border: none;
+      background: rgba(31, 41, 55, 0.9);
+      color: #9ca3af;
+      border-radius: 999px;
+      padding: 2px 7px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    #clear-search:hover {
+      background: rgba(55, 65, 81, 0.95);
+      color: #e5e7eb;
+    }
+
+    #search-info {
+      font-size: 11px;
+      color: #9ca3af;
+      min-width: 80px;
+      text-align: right;
+    }
+
     /* TABLE CONTAINER */
     #table-container {
-      max-height: 460px;
+      max-height: 432px;
       border-radius: 18px;
       border: 1px solid rgba(31, 41, 55, 0.9);
       background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.98));
@@ -356,7 +417,24 @@
       max-width: 220px;
     }
 
-    /* coret kalau done */
+    /* --- Warna teks sesuai status --- */
+    tr.status-red .cell-text {
+      color: #fecaca;
+    }
+
+    tr.status-blue .cell-text {
+      color: #bfdbfe;
+    }
+
+    tr.status-green .cell-text {
+      color: #bbf7d0;
+    }
+
+    tr.status-yellow .cell-text {
+      color: #fef9c3;
+    }
+
+    /* coret kalau done (override warna status) */
     tr.row-done .cell-text {
       text-decoration: line-through;
       text-decoration-thickness: 1px;
@@ -455,12 +533,12 @@
         </header>
 
         <main>
+          <!-- DROP ZONE -->
           <div id="drop-zone">
             <div class="drop-text">
               <div class="drop-title">Drag & drop file Excel (.xlsx) di sini</div>
               <div class="drop-subtitle">
                 atau 
-                <!-- pakai LABEL biar kayak web UT -->
                 <label for="file-input" class="browse-link">pilih file dari komputer</label>.
               </div>
             </div>
@@ -468,10 +546,25 @@
               <span class="chip-dot"></span>
               <span>Live dari Excel • 1 sheet pertama</span>
             </div>
-            <!-- input file disembunyikan tapi tetap ada di DOM -->
             <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none;" />
           </div>
 
+          <!-- SEARCH BAR -->
+          <div class="search-bar">
+            <div class="search-input-wrap">
+              <span class="icon">🔎</span>
+              <input
+                id="search-input"
+                type="text"
+                placeholder="Cari Order SN / nama / teks lain..."
+                autocomplete="off"
+              />
+              <button id="clear-search" type="button">✕</button>
+            </div>
+            <div id="search-info"></div>
+          </div>
+
+          <!-- TABEL -->
           <div id="table-container">
             <!-- tabel di-generate via JS setelah file dibaca -->
           </div>
@@ -496,10 +589,14 @@
       const tableContainer = document.getElementById("table-container");
       const paletteDots = document.querySelectorAll(".color-dot");
       const statusMsg = document.getElementById("status-msg");
+
+      const searchInput = document.getElementById("search-input");
+      const clearSearchBtn = document.getElementById("clear-search");
+      const searchInfo = document.getElementById("search-info");
+
       let currentColor = "red";
       let selectedRow = null;
 
-      // info awal
       if (typeof XLSX === "undefined") {
         statusMsg.textContent = "❌ Gagal load library XLSX. Cek koneksi internet / blokir CDN.";
         statusMsg.classList.add("err");
@@ -508,34 +605,58 @@
         statusMsg.classList.add("ok");
       }
 
-      // ---- Palette (warna status) ----
+      // --- helper warna ---
+      function clearStatusClasses(row) {
+        row.classList.remove("status-red", "status-blue", "status-green", "status-yellow");
+      }
+
+      function applyColorToRow(row, color) {
+        const tag = row.querySelector(".color-tag");
+        if (tag) tag.className = "color-tag " + color;
+        clearStatusClasses(row);
+        if (color) {
+          row.classList.add("status-" + color);
+        }
+      }
+
+      function resetRowColor(row) {
+        const tag = row.querySelector(".color-tag");
+        if (tag) tag.className = "color-tag";
+        clearStatusClasses(row);
+      }
+
+      // --- palette toggle ---
       paletteDots.forEach(dot => {
         dot.addEventListener("click", () => {
-          paletteDots.forEach(d => d.classList.remove("active"));
-          dot.classList.add("active");
-          currentColor = dot.dataset.color;
+          const isActive = dot.classList.contains("active");
 
-          if (selectedRow) {
-            applyColorToRow(selectedRow, currentColor);
+          if (isActive) {
+            // klik lagi warna yg sama -> matikan palette, reset warna baris terpilih
+            paletteDots.forEach(d => d.classList.remove("active"));
+            currentColor = null;
+            if (selectedRow) {
+              resetRowColor(selectedRow);
+            }
+          } else {
+            // pilih warna baru
+            paletteDots.forEach(d => d.classList.remove("active"));
+            dot.classList.add("active");
+            currentColor = dot.dataset.color;
+            if (selectedRow) {
+              applyColorToRow(selectedRow, currentColor);
+            }
           }
         });
       });
 
-      function applyColorToRow(row, color) {
-        const tag = row.querySelector(".color-tag");
-        if (!tag) return;
-        tag.className = "color-tag " + color;
-      }
-
-      // ---- Input file (via LABEL) ----
+      // --- file input ---
       fileInput.addEventListener("change", (e) => {
         const file = e.target.files[0];
         handleFile(file);
-        // reset supaya bisa pilih file yang sama lagi
         fileInput.value = "";
       });
 
-      // ---- Drag & Drop ----
+      // --- drag & drop ---
       if (dropZone) {
         dropZone.addEventListener("dragover", (e) => {
           e.preventDefault();
@@ -555,7 +676,7 @@
         });
       }
 
-      // ---- Handle file Excel ----
+      // --- baca file excel ---
       function handleFile(file) {
         if (!file) return;
 
@@ -598,6 +719,7 @@
             buildTable(json);
             statusMsg.textContent = "✅ File dimuat: " + file.name + " (" + json.length + " baris).";
             statusMsg.classList.add("ok");
+            updateSearchInfo();
           } catch (err) {
             console.error(err);
             alert("Gagal membaca file. Cek format Excel kamu.");
@@ -615,13 +737,12 @@
         reader.readAsArrayBuffer(file);
       }
 
-      // ---- Build tabel dari JSON ----
+      // --- build tabel ---
       function buildTable(rows) {
         selectedRow = null;
         tableContainer.innerHTML = "";
 
         const columns = Object.keys(rows[0]);
-
         const table = document.createElement("table");
         const thead = document.createElement("thead");
         const headerRow = document.createElement("tr");
@@ -671,7 +792,7 @@
           tdColor.appendChild(tag);
           tr.appendChild(tdColor);
 
-          // kolom data dari Excel
+          // kolom data
           columns.forEach(col => {
             const td = document.createElement("td");
             const span = document.createElement("span");
@@ -681,9 +802,9 @@
             tr.appendChild(td);
           });
 
-          // klik baris untuk pilih
+          // klik baris
           tr.addEventListener("click", (e) => {
-            if (e.target.tagName === "INPUT") return; // biar checkbox tetap bisa diklik aman
+            if (e.target.tagName === "INPUT") return;
 
             if (selectedRow && selectedRow !== tr) {
               selectedRow.classList.remove("selected");
@@ -695,7 +816,12 @@
             } else {
               tr.classList.add("selected");
               selectedRow = tr;
-              applyColorToRow(tr, currentColor);
+
+              if (currentColor) {
+                applyColorToRow(tr, currentColor);
+              } else {
+                resetRowColor(tr);
+              }
             }
           });
 
@@ -704,6 +830,54 @@
 
         table.appendChild(tbody);
         tableContainer.appendChild(table);
+      }
+
+      // --- search ---
+      function handleSearch() {
+        const q = (searchInput.value || "").trim().toLowerCase();
+        const tbody = tableContainer.querySelector("tbody");
+        if (!tbody) {
+          searchInfo.textContent = "";
+          return;
+        }
+
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        let visibleCount = 0;
+
+        rows.forEach(tr => {
+          const text = tr.textContent.toLowerCase();
+          const match = !q || text.includes(q);
+          tr.style.display = match ? "" : "none";
+          if (match) visibleCount++;
+        });
+
+        const total = rows.length;
+        if (!total) {
+          searchInfo.textContent = "";
+          return;
+        }
+
+        if (q) {
+          searchInfo.textContent = visibleCount + " / " + total + " baris cocok";
+        } else {
+          searchInfo.textContent = total + " baris total";
+        }
+      }
+
+      function updateSearchInfo() {
+        handleSearch();
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener("input", handleSearch);
+      }
+
+      if (clearSearchBtn) {
+        clearSearchBtn.addEventListener("click", () => {
+          searchInput.value = "";
+          handleSearch();
+          searchInput.focus();
+        });
       }
     });
   </script>
