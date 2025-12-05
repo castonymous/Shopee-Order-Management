@@ -151,6 +151,7 @@
     .color-dot.blue { background: #3b82f6; }
     .color-dot.green { background: #22c55e; }
     .color-dot.yellow { background: #eab308; }
+    .color-dot.none { background: #4b5563; }
 
     .color-dot.active {
       transform: scale(1.08) translateY(-1px);
@@ -417,19 +418,16 @@
       max-width: 220px;
     }
 
-    /* --- Warna teks sesuai status --- */
+    /* Warna teks sesuai status */
     tr.status-red .cell-text {
       color: #fecaca;
     }
-
     tr.status-blue .cell-text {
       color: #bfdbfe;
     }
-
     tr.status-green .cell-text {
       color: #bbf7d0;
     }
-
     tr.status-yellow .cell-text {
       color: #fef9c3;
     }
@@ -529,6 +527,7 @@
             <button class="color-dot blue" data-color="blue" title="Biru - Diproses"></button>
             <button class="color-dot green" data-color="green" title="Hijau - Selesai"></button>
             <button class="color-dot yellow" data-color="yellow" title="Kuning - Pending"></button>
+            <button class="color-dot none" data-color="none" title="Hapus warna"></button>
           </div>
         </header>
 
@@ -573,7 +572,7 @@
         <footer>
           <div class="hint">
             <span><span class="kbd">1</span> Klik baris untuk pilih pesanan</span>
-            <span><span class="kbd">2</span> Klik warna di atas untuk atur status</span>
+            <span><span class="kbd">2</span> Klik warna di atas untuk atur / hapus status</span>
             <span><span class="kbd">3</span> Checklist untuk coret pesanan yang sudah beres</span>
           </div>
           <div>Semua proses hanya di browser kamu (nggak upload ke server).</div>
@@ -594,7 +593,7 @@
       const clearSearchBtn = document.getElementById("clear-search");
       const searchInfo = document.getElementById("search-info");
 
-      let currentColor = "red";
+      let currentColor = "red"; // default: merah
       let selectedRow = null;
 
       if (typeof XLSX === "undefined") {
@@ -612,11 +611,14 @@
 
       function applyColorToRow(row, color) {
         const tag = row.querySelector(".color-tag");
+        if (color === "none" || !color) {
+          if (tag) tag.className = "color-tag";
+          clearStatusClasses(row);
+          return;
+        }
         if (tag) tag.className = "color-tag " + color;
         clearStatusClasses(row);
-        if (color) {
-          row.classList.add("status-" + color);
-        }
+        row.classList.add("status-" + color);
       }
 
       function resetRowColor(row) {
@@ -625,26 +627,31 @@
         clearStatusClasses(row);
       }
 
-      // --- palette toggle ---
+      // --- palette (termasuk warna "none" untuk hapus) ---
       paletteDots.forEach(dot => {
         dot.addEventListener("click", () => {
+          const color = dot.dataset.color;
           const isActive = dot.classList.contains("active");
 
           if (isActive) {
-            // klik lagi warna yg sama -> matikan palette, reset warna baris terpilih
-            paletteDots.forEach(d => d.classList.remove("active"));
+            // klik lagi warna yang sama -> matikan mode warna, jadi tidak ngubah apa-apa
+            dot.classList.remove("active");
             currentColor = null;
-            if (selectedRow) {
-              resetRowColor(selectedRow);
-            }
           } else {
-            // pilih warna baru
+            // set warna baru
             paletteDots.forEach(d => d.classList.remove("active"));
             dot.classList.add("active");
-            currentColor = dot.dataset.color;
-            if (selectedRow) {
-              applyColorToRow(selectedRow, currentColor);
+            currentColor = color;
+          }
+
+          // update baris yang lagi dipilih
+          if (selectedRow) {
+            if (!currentColor) {
+              // kalau nggak ada warna aktif (mode off)
+              // jangan ubah warna row, biarin status row tetap seperti sebelumnya
+              return;
             }
+            applyColorToRow(selectedRow, currentColor);
           }
         });
       });
@@ -817,11 +824,11 @@
               tr.classList.add("selected");
               selectedRow = tr;
 
-              if (currentColor) {
-                applyColorToRow(tr, currentColor);
-              } else {
-                resetRowColor(tr);
+              if (!currentColor) {
+                // mode off -> jangan ubah status warna baris
+                return;
               }
+              applyColorToRow(tr, currentColor);
             }
           });
 
