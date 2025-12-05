@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Order Board - Liquid Glass</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Font -->
+  <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- XLSX (SheetJS) untuk baca Excel di browser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-U8H2LHa1eT8KZb7Vrgv3Lus72v3RokzV+5NM/3kiVfzxYCxMl6fFq4YdZpVlueiEQTWsgmmtcYn6dShRIlrT6g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(circle at top, #1f2937 0, #020617 40%, #000000 100%);
+      color: #e5e7eb;
+      padding: 24px;
+    }
+
+    .app-shell {
+      width: 100%;
+      max-width: 1100px;
+    }
+
+    .glass-card {
+      position: relative;
+      border-radius: 28px;
+      padding: 20px 22px 18px;
+      background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 55%)
+        rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      box-shadow:
+        0 32px 90px rgba(15, 23, 42, 0.95),
+        0 0 0 0.5px rgba(148, 163, 184, 0.6);
+      backdrop-filter: blur(26px) saturate(160%);
+      -webkit-backdrop-filter: blur(26px) saturate(160%);
+      overflow: hidden;
+    }
+
+    /* Little light glow */
+    .glass-card::before {
+      content: "";
+      position: absolute;
+      inset: -120px;
+      background:
+        radial-gradient(circle at 0 0, rgba(96, 165, 250, 0.17) 0, transparent 55%),
+        radial-gradient(circle at 100% 0, rgba(248, 250, 252, 0.12) 0, transparent 55%);
+      opacity: 0.65;
+      pointer-events: none;
+    }
+
+    .glass-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .title-block h1 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title-pill {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: linear-gradient(
+        120deg,
+        rgba(15, 23, 42, 0.8),
+        rgba(30, 64, 175, 0.85)
+      );
+      box-shadow: 0 0 12px rgba(37, 99, 235, 0.5);
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    .palette {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: radial-gradient(circle at top, rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.95));
+      border: 1px solid rgba(148, 163, 184, 0.5);
+    }
+
+    .palette-label {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-right: 4px;
+    }
+
+    .color-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 23, 42, 0.7);
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.3), 0 0 8px rgba(15, 23, 42, 0.6);
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+      opacity: 0.7;
+    }
+
+    .color-dot.red { background: #ef4444; }
+    .color-dot.blue { background: #3b82f6; }
+    .color-dot.green { background: #22c55e; }
+    .color-dot.yellow { background: #eab308; }
+
+    .color-dot.active {
+      transform: scale(1.08) translateY(-1px);
+      box-shadow:
+        0 0 0 1px rgba(241, 245, 249, 0.85),
+        0 0 16px rgba(248, 250, 252, 0.8);
+      opacity: 1;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Drop zone */
+    #drop-zone {
+      position: relative;
+      border-radius: 18px;
+      border: 1px dashed rgba(148, 163, 184, 0.7);
+      padding: 14px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: radial-gradient(circle at top left, rgba(30, 64, 175, 0.3), rgba(15, 23, 42, 0.9));
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    #drop-zone::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        120deg,
+        rgba(255, 255, 255, 0.14),
+        transparent 40%,
+        transparent 60%,
+        rgba(148, 163, 184, 0.2)
+      );
+      opacity: 0.18;
+      pointer-events: none;
+    }
+
+    #drop-zone.dragover {
+      border-style: solid;
+      border-color: rgba(248, 250, 252, 0.95);
+      box-shadow:
+        0 0 0 1px rgba(248, 250, 252, 0.85),
+        0 0 18px rgba(56, 189, 248, 0.6);
+    }
+
+    .drop-text {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .drop-title {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .drop-subtitle {
+      font-size: 11px;
+      color: #cbd5f5;
+    }
+
+    .browse-link {
+      font-weight: 500;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      cursor: pointer;
+    }
+
+    .chip {
+      position: relative;
+      z-index: 1;
+      font-size: 11px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.95), rgba(8, 47, 73, 0.95));
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chip-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
+    }
+
+    /* Table */
+    #table-container {
+      max-height: 460px;
+      border-radius: 18px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.98));
+      overflow: hidden;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.8) transparent;
+    }
+
+    #table-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    #table-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #table-container::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.75);
+      border-radius: 999px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: linear-gradient(
+        to bottom,
+        rgba(15, 23, 42, 0.97),
+        rgba(15, 23, 42, 0.98)
+      );
+      box-shadow: 0 3px 0 rgba(15, 23, 42, 0.9);
+    }
+
+    thead th {
+      text-align: left;
+      font-weight: 500;
+      color: #9ca3af;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(31, 41, 55, 1);
+      white-space: nowrap;
+    }
+
+    thead th:first-child {
+      width: 32px;
+      text-align: center;
+    }
+
+    thead th:nth-child(2) {
+      width: 60px;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid rgba(31, 41, 55, 0.8);
+      transition: background 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: rgba(30, 64, 175, 0.32);
+    }
+
+    tbody tr.selected {
+      box-shadow: inset 0 0 0 1px rgba(248, 250, 252, 0.75);
+      background: linear-gradient(
+        120deg,
+        rgba(30, 64, 175, 0.7),
+        rgba(15, 23, 42, 0.9)
+      );
+    }
+
+    td {
+      padding: 6px 10px;
+      vertical-align: top;
+    }
+
+    td:first-child {
+      text-align: center;
+    }
+
+    .row-checkbox {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      accent-color: #22c55e;
+    }
+
+    .cell-text {
+      display: inline-block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+
+    /* Strikethrough saat checklist */
+    tr.row-done .cell-text {
+      text-decoration: line-through;
+      text-decoration-thickness: 1px;
+      text-decoration-color: rgba(148, 163, 184, 0.9);
+      color: #6b7280;
+    }
+
+    tr.row-done {
+      opacity: 0.75;
+    }
+
+    .color-tag {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 23, 42, 0.9);
+      background: rgba(55, 65, 81, 0.9);
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.8);
+    }
+
+    .color-tag.red    { background: #ef4444; box-shadow: 0 0 10px rgba(248, 113, 113, 0.9); }
+    .color-tag.blue   { background: #3b82f6; box-shadow: 0 0 10px rgba(96, 165, 250, 0.9); }
+    .color-tag.green  { background: #22c55e; box-shadow: 0 0 10px rgba(52, 211, 153, 0.9); }
+    .color-tag.yellow { background: #eab308; box-shadow: 0 0 10px rgba(250, 204, 21, 0.9); }
+
+    footer {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #6b7280;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .hint {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .hint span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(17, 24, 39, 0.95);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+    }
+
+    .kbd {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      border: 1px solid rgba(75, 85, 99, 0.9);
+      background: rgba(17, 24, 39, 0.95);
+    }
+
+    @media (max-width: 768px) {
+      .glass-card {
+        padding: 16px 14px 14px;
+      }
+      .title-block h1 {
+        font-size: 18px;
+      }
+      #table-container {
+        max-height: 360px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="glass-card">
+      <div class="glass-inner">
+        <header>
+          <div class="title-block">
+            <h1>
+              Order Board
+              <span class="title-pill">Liquid Glass</span>
+            </h1>
+            <div class="subtitle">
+              Drag & drop file Excel pesanan-mu, checklist & kasih warna status.
+            </div>
+          </div>
+
+          <div class="palette" id="palette">
+            <span class="palette-label">Status:</span>
+            <button class="color-dot red active" data-color="red" title="Merah - Urgent"></button>
+            <button class="color-dot blue" data-color="blue" title="Biru - Diproses"></button>
+            <button class="color-dot green" data-color="green" title="Hijau - Selesai"></button>
+            <button class="color-dot yellow" data-color="yellow" title="Kuning - Pending"></button>
+          </div>
+        </header>
+
+        <main>
+          <div id="drop-zone">
+            <div class="drop-text">
+              <div class="drop-title">Drag & drop file Excel (.xlsx) di sini</div>
+              <div class="drop-subtitle">
+                atau <span class="browse-link" id="browse-btn">pilih file dari komputer</span>.
+              </div>
+            </div>
+            <div class="chip">
+              <span class="chip-dot"></span>
+              <span>Live dari Excel • 1 sheet pertama</span>
+            </div>
+            <input type="file" id="file-input" accept=".xlsx,.xls" hidden />
+          </div>
+
+          <div id="table-container">
+            <!-- tabel akan di-generate lewat JS setelah file di-drop -->
+          </div>
+        </main>
+
+        <footer>
+          <div class="hint">
+            <span><span class="kbd">1</span> Pilih baris pesanan (klik baris)</span>
+            <span><span class="kbd">2</span> Klik warna di atas untuk set status</span>
+            <span><span class="kbd">3</span> Checklist untuk coret yang sudah beres</span>
+          </div>
+          <div>Data tidak disimpan ke server, hanya di browser kamu.</div>
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("file-input");
+    const browseBtn = document.getElementById("browse-btn");
+    const tableContainer = document.getElementById("table-container");
+    const paletteDots = document.querySelectorAll(".color-dot");
+    let currentColor = "red";
+    let selectedRow = null;
+
+    // ---- Palette logic ----
+    paletteDots.forEach(dot => {
+      dot.addEventListener("click", () => {
+        paletteDots.forEach(d => d.classList.remove("active"));
+        dot.classList.add("active");
+        currentColor = dot.dataset.color;
+
+        // kalau ada baris yang lagi dipilih, langsung apply
+        if (selectedRow) {
+          applyColorToRow(selectedRow, currentColor);
+        }
+      });
+    });
+
+    function applyColorToRow(row, color) {
+      const tag = row.querySelector(".color-tag");
+      if (!tag) return;
+      tag.className = "color-tag " + color;
+    }
+
+    // ---- Drag & Drop ----
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    browseBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      handleFile(file);
+      // reset supaya bisa pilih file yang sama dua kali
+      fileInput.value = "";
+    });
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      const file = e.dataTransfer.files[0];
+      handleFile(file);
+    });
+
+    // ---- Handle Excel file ----
+    function handleFile(file) {
+      if (!file) return;
+      if (!/\.xlsx?$/.test(file.name.toLowerCase())) {
+        alert("Tolong pilih file Excel (.xlsx / .xls)");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+        if (!json || !json.length) {
+          alert("Sheet pertama kosong atau tidak terbaca.");
+          return;
+        }
+
+        buildTable(json);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // ---- Build table from JSON ----
+    function buildTable(rows) {
+      selectedRow = null;
+      tableContainer.innerHTML = "";
+
+      const columns = Object.keys(rows[0]);
+
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+
+      // kolom checkbox
+      const thCheck = document.createElement("th");
+      thCheck.textContent = "";
+      headerRow.appendChild(thCheck);
+
+      // kolom color tag
+      const thColor = document.createElement("th");
+      thColor.textContent = "Status";
+      headerRow.appendChild(thColor);
+
+      // kolom data dari excel
+      columns.forEach(col => {
+        const th = document.createElement("th");
+        th.textContent = col;
+        headerRow.appendChild(th);
+      });
+
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+
+      rows.forEach((rowData, index) => {
+        const tr = document.createElement("tr");
+        tr.dataset.index = index;
+
+        // checkbox cell
+        const tdCheck = document.createElement("td");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "row-checkbox";
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            tr.classList.add("row-done");
+          } else {
+            tr.classList.remove("row-done");
+          }
+        });
+        tdCheck.appendChild(cb);
+        tr.appendChild(tdCheck);
+
+        // color tag cell
+        const tdColor = document.createElement("td");
+        const tag = document.createElement("div");
+        tag.className = "color-tag"; // default abu-abu
+        tdColor.appendChild(tag);
+        tr.appendChild(tdColor);
+
+        // data cells
+        columns.forEach(col => {
+          const td = document.createElement("td");
+          const span = document.createElement("span");
+          span.className = "cell-text";
+          span.textContent = rowData[col];
