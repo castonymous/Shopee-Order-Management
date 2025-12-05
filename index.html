@@ -575,7 +575,7 @@
             <span><span class="kbd">2</span> Klik warna di atas untuk atur / hapus status</span>
             <span><span class="kbd">3</span> Checklist untuk coret pesanan yang sudah beres</span>
           </div>
-          <div>Semua proses hanya di browser kamu (nggak upload ke server).</div>
+          <div>History status disimpan di browser (per nama file).</div>
         </footer>
       </div>
     </div>
@@ -595,7 +595,97 @@
 
       let currentColor = "red"; // default: merah
       let selectedRow = null;
+      let currentFileKey = null; // nama file Excel saat ini
 
+      // --- Helper state di localStorage ---
+      const LS_KEY = "orderBoardState";
+
+      function loadAllState() {
+        try {
+          const raw = localStorage.getItem(LS_KEY);
+          if (!raw) return {};
+          return JSON.parse(raw);
+        } catch (e) {
+          console.warn("Gagal parse localStorage:", e);
+          return {};
+        }
+      }
+
+      function saveAllState(all) {
+        try {
+          localStorage.setItem(LS_KEY, JSON.stringify(all));
+        } catch (e) {
+          console.warn("Gagal simpan localStorage:", e);
+        }
+      }
+
+      function saveCurrentFileState() {
+        if (!currentFileKey) return;
+        const tbody = tableContainer.querySelector("tbody");
+        const allState = loadAllState();
+        const fileState = {};
+
+        if (!tbody) {
+          allState[currentFileKey] = fileState;
+          saveAllState(allState);
+          return;
+        }
+
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        rows.forEach(tr => {
+          const idx = tr.dataset.index;
+          const cb = tr.querySelector(".row-checkbox");
+          const tag = tr.querySelector(".color-tag");
+
+          let color = null;
+          if (tag) {
+            if (tag.classList.contains("red")) color = "red";
+            else if (tag.classList.contains("blue")) color = "blue";
+            else if (tag.classList.contains("green")) color = "green";
+            else if (tag.classList.contains("yellow")) color = "yellow";
+          }
+
+          fileState[idx] = {
+            done: cb ? cb.checked : false,
+            color: color
+          };
+        });
+
+        allState[currentFileKey] = fileState;
+        saveAllState(allState);
+      }
+
+      function applySavedStateToTable() {
+        if (!currentFileKey) return;
+        const allState = loadAllState();
+        const fileState = allState[currentFileKey];
+        if (!fileState) return;
+
+        const tbody = tableContainer.querySelector("tbody");
+        if (!tbody) return;
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+
+        rows.forEach(tr => {
+          const idx = tr.dataset.index;
+          const state = fileState[idx];
+          if (!state) return;
+
+          const cb = tr.querySelector(".row-checkbox");
+
+          // checklist
+          if (cb && state.done) {
+            cb.checked = true;
+            tr.classList.add("row-done");
+          }
+
+          // warna
+          if (state.color) {
+            applyColorToRow(tr, state.color);
+          }
+        });
+      }
+
+      // --- info awal ---
       if (typeof XLSX === "undefined") {
         statusMsg.textContent = "❌ Gagal load library XLSX. Cek koneksi internet / blokir CDN.";
         statusMsg.classList.add("err");
@@ -634,7 +724,7 @@
           const isActive = dot.classList.contains("active");
 
           if (isActive) {
-            // klik lagi warna yang sama -> matikan mode warna, jadi tidak ngubah apa-apa
+            // klik lagi warna yang sama -> mode warna off
             dot.classList.remove("active");
             currentColor = null;
           } else {
@@ -647,11 +737,12 @@
           // update baris yang lagi dipilih
           if (selectedRow) {
             if (!currentColor) {
-              // kalau nggak ada warna aktif (mode off)
-              // jangan ubah warna row, biarin status row tetap seperti sebelumnya
+              // off -> jangan ubah apa-apa lagi
+              saveCurrentFileState();
               return;
             }
             applyColorToRow(selectedRow, currentColor);
+            saveCurrentFileState();
           }
         });
       });
@@ -703,6 +794,8 @@
           return;
         }
 
+        currentFileKey = file.name; // pakai nama file sebagai key history
+
         statusMsg.textContent = "⏳ Membaca file: " + file.name + "...";
         statusMsg.classList.remove("err");
         statusMsg.classList.remove("ok");
@@ -727,6 +820,9 @@
             statusMsg.textContent = "✅ File dimuat: " + file.name + " (" + json.length + " baris).";
             statusMsg.classList.add("ok");
             updateSearchInfo();
+
+            // setelah tabel jadi, apply state yang pernah disimpan
+            applySavedStateToTable();
           } catch (err) {
             console.error(err);
             alert("Gagal membaca file. Cek format Excel kamu.");
@@ -788,6 +884,7 @@
             } else {
               tr.classList.remove("row-done");
             }
+            saveCurrentFileState();
           });
           tdCheck.appendChild(cb);
           tr.appendChild(tdCheck);
@@ -824,12 +921,13 @@
               tr.classList.add("selected");
               selectedRow = tr;
 
-              if (!currentColor) {
-                // mode off -> jangan ubah status warna baris
-                return;
+              if (currentColor) {
+                applyColorToRow(tr, currentColor);
               }
-              applyColorToRow(tr, currentColor);
+              // kalau currentColor null -> cuma pilih baris tanpa ubah warna
             }
+
+            saveCurrentFileState();
           });
 
           tbody.appendChild(tr);
